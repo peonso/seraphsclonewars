@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plataforma Shooter AI</title>
+    <title>Seraph's Clone Wars</title>
     <style>
         * {
             margin: 0;
@@ -13,6 +13,7 @@
         
         body {
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
@@ -20,6 +21,35 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             overflow: hidden;
             color: #fff;
+            padding: 20px;
+        }
+        
+        #gameHeader {
+            text-align: center;
+            margin-bottom: 20px;
+            width: 100%;
+        }
+        
+        #gameTitle {
+            font-size: 48px;
+            font-weight: bold;
+            color: #ffd700;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.7), 3px 3px 0 #ff6b6b;
+            margin-bottom: 10px;
+        }
+        
+        #controlsInfo {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        #controlsInfo p {
+            margin: 8px 0;
+            font-size: 18px;
         }
         
         #gameContainer {
@@ -134,19 +164,6 @@
         .rarity-epic { color: #a020f0; }
         .rarity-legendary { color: #ffd700; }
         
-        #gameTitle {
-            position: absolute;
-            top: 20px;
-            left: 0;
-            width: 100%;
-            text-align: center;
-            font-size: 48px;
-            font-weight: bold;
-            color: #ffd700;
-            text-shadow: 0 0 10px rgba(255, 215, 0, 0.7), 3px 3px 0 #ff6b6b;
-            pointer-events: none;
-        }
-        
         #startScreen {
             position: absolute;
             top: 0;
@@ -177,20 +194,6 @@
         #startButton:hover {
             transform: scale(1.1);
             box-shadow: 0 7px 20px rgba(247, 37, 133, 0.5);
-        }
-        
-        #controlsInfo {
-            margin-top: 30px;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 15px;
-            border-radius: 10px;
-            text-align: center;
-            max-width: 80%;
-        }
-        
-        #controlsInfo p {
-            margin: 10px 0;
-            font-size: 18px;
         }
         
         #gameOverScreen {
@@ -234,9 +237,23 @@
         #restartButton:hover {
             transform: scale(1.1);
         }
+        
+        #gameFooter {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 18px;
+            color: #aaa;
+        }
     </style>
 </head>
 <body>
+    <div id="gameHeader">
+        <div id="gameTitle">Seraph's Clone Wars</div>
+        <div id="controlsInfo">
+            <p>A / D - Mover para esquerda/direita | ESPAÇO - Pular | MOUSE - Mirar (atira automaticamente)</p>
+        </div>
+    </div>
+    
     <div id="gameContainer">
         <canvas id="gameCanvas" width="800" height="600"></canvas>
         
@@ -250,8 +267,6 @@
             <div class="stat">Nível: <span id="levelDisplay">1</span></div>
             <div class="stat">Pontuação: <span id="scoreDisplay">0</span></div>
         </div>
-        
-        <div id="gameTitle">PLATAFORMA AI SHOOTER</div>
         
         <div id="levelUpScreen">
             <div id="levelUpTitle">NÍVEL AUMENTADO!</div>
@@ -270,15 +285,7 @@
         </div>
         
         <div id="startScreen">
-            <h1>PLATAFORMA AI SHOOTER</h1>
-            <p>Um desafio de desenvolvimento de jogos com IA</p>
             <button id="startButton">COMEÇAR JOGO</button>
-            <div id="controlsInfo">
-                <p>CONTROLES:</p>
-                <p>A / D - Mover para esquerda/direita</p>
-                <p>ESPAÇO - Pular</p>
-                <p>MOUSE - Mirar e atirar (clique ou segure)</p>
-            </div>
         </div>
         
         <div id="gameOverScreen">
@@ -287,9 +294,13 @@
             <button id="restartButton">JOGAR NOVAMENTE</button>
         </div>
     </div>
+    
+    <div id="gameFooter">
+        <p>Desafio de desenvolvimento de jogos com IA - Seraph's Clone Wars</p>
+    </div>
 
     <script>
-        // Configurações do jogo
+        // CONFIGURAÇÕES BALANCEADAS
         const config = {
             player: {
                 width: 30,
@@ -311,12 +322,12 @@
             enemy: {
                 width: 40,
                 height: 40,
-                spawnRate: 60, // frames entre spawns
-                moveSpeed: 1.5,
-                followHeight: 0.7, // 70% da altura da tela
-                shootCooldown: 100,
-                projectileSpeed: 5,
-                projectileDamage: 15
+                spawnRate: 120, // Spawn mais lento (era 60)
+                moveSpeed: 1.0, // Movimento mais lento (era 1.5)
+                followHeight: 0.7,
+                shootCooldown: 150, // Tiros mais lentos (era 100)
+                projectileSpeed: 4, // Projéteis mais lentos (era 5)
+                projectileDamage: 10 // Dano reduzido (era 15)
             },
             exp: {
                 baseLevelUp: 100,
@@ -353,8 +364,7 @@
             keys: {},
             mouse: {
                 x: 0,
-                y: 0,
-                isDown: false
+                y: 0
             },
             lastShot: 0,
             lastEnemyShot: 0,
@@ -471,9 +481,9 @@
                     }
                 }
                 
-                // Atirar se o mouse estiver pressionado
+                // Atirar continuamente na direção do mouse
                 const now = Date.now() / 1000;
-                if (gameState.mouse.isDown && now - gameState.lastShot > this.shootCooldown) {
+                if (now - gameState.lastShot > this.shootCooldown) {
                     this.shoot();
                     gameState.lastShot = now;
                 }
@@ -601,8 +611,9 @@
                 this.y = -this.height;
                 this.velY = config.enemy.moveSpeed;
                 this.following = false;
-                this.health = 30 + gameState.wave * 5;
-                this.maxHealth = 30 + gameState.wave * 5;
+                // Vida reduzida e escala de dificuldade mais lenta
+                this.health = 20 + gameState.wave * 3; // Era 30 + wave*5
+                this.maxHealth = 20 + gameState.wave * 3;
                 this.shootTimer = 0;
             }
 
@@ -612,12 +623,21 @@
                 } else {
                     this.following = true;
                     
-                    // Seguir o jogador com atraso
+                    // Seguir o jogador com atraso e manter distância mínima
                     const dx = gameState.player.x + gameState.player.width/2 - (this.x + this.width/2);
                     const dy = gameState.player.y + gameState.player.height/2 - (this.y + this.height/2);
+                    const distance = Math.sqrt(dx*dx + dy*dy);
                     
-                    this.x += dx * 0.02;
-                    this.y += dy * 0.02;
+                    // Manter pelo menos 100px de distância
+                    if (distance < 100) {
+                        // Afastar do jogador
+                        this.x -= dx * 0.03;
+                        this.y -= dy * 0.03;
+                    } else {
+                        // Seguir normalmente
+                        this.x += dx * 0.02;
+                        this.y += dy * 0.02;
+                    }
                     
                     // Atirar periodicamente
                     this.shootTimer += 1/60;
@@ -927,9 +947,9 @@
             if (!gameState.isLevelUp && !gameState.gameOver) {
                 gameState.player.update();
                 
-                // Spawn de inimigos
+                // Spawn de inimigos (taxa reduzida)
                 gameState.lastSpawn++;
-                const spawnRate = Math.max(10, config.enemy.spawnRate - gameState.wave * 2);
+                const spawnRate = Math.max(30, config.enemy.spawnRate - gameState.wave); // Era 10
                 if (gameState.lastSpawn > spawnRate) {
                     gameState.enemies.push(new Enemy());
                     gameState.lastSpawn = 0;
@@ -965,11 +985,6 @@
             ctx.font = '24px Arial';
             ctx.textAlign = 'right';
             ctx.fillText(`Wave: ${gameState.wave}`, 780, 30);
-            
-            // Desenhar instruções
-            ctx.textAlign = 'center';
-            ctx.font = '16px Arial';
-            ctx.fillText('A/D para mover, ESPAÇO para pular, CLIQUE para atirar', 400, 580);
             
             // Continuar o loop
             if (!gameState.gameOver) {
@@ -1010,14 +1025,6 @@
             const rect = document.getElementById('gameCanvas').getBoundingClientRect();
             gameState.mouse.x = e.clientX - rect.left;
             gameState.mouse.y = e.clientY - rect.top;
-        });
-
-        document.getElementById('gameCanvas').addEventListener('mousedown', (e) => {
-            gameState.mouse.isDown = true;
-        });
-
-        document.getElementById('gameCanvas').addEventListener('mouseup', (e) => {
-            gameState.mouse.isDown = false;
         });
 
         // Inicializar UI
