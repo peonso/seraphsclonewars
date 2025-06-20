@@ -26,7 +26,6 @@
         color: #e9c6b6;
         padding: 20px;
         position: relative;
-        /* Adicionado para posicionar o debug panel */
       }
 
       #gameHeader {
@@ -49,8 +48,10 @@
         padding: 15px;
         border-radius: 10px;
         text-align: center;
-        max-width: 1600px;
+        width: 960px;
+        /* Mesma largura do canvas */
         margin: 0 auto;
+        /* Centralizar */
         border: 1px solid #523a35;
         color: #ca9385;
         font-size: 16px;
@@ -294,11 +295,9 @@
         margin-bottom: 20px;
       }
 
-      /* Painel de debug - AGORA FORA DO CONTAINER */
       #debugPanel {
         position: absolute;
         top: 150px;
-        /* Posição abaixo do cabeçalho */
         right: 20px;
         background: rgba(39, 38, 45, 0.8);
         padding: 15px;
@@ -349,13 +348,10 @@
         <p>Clique novamente para continuar</p>
       </div>
     </div>
-    <!-- DEBUG PANEL MOVED OUTSIDE GAME CONTAINER -->
     <div id="debugPanel"></div>
     <script>
-      // ===== DIMENSÕES DO CANVAS =====
       const CANVAS_WIDTH = 960;
       const CANVAS_HEIGHT = 600;
-      // CONFIGURAÇÕES BALANCEADAS
       const config = {
         player: {
           width: 30,
@@ -380,7 +376,6 @@
           height: 40,
           spawnRate: 1.5,
           moveSpeed: 120,
-          minHeight: CANVAS_HEIGHT * 0.5,
           shootCooldown: 0.33,
           projectileSpeed: 120,
           projectileDamage: 10,
@@ -388,9 +383,9 @@
         },
         exp: {
           baseLevelUp: 100,
-          growthFactor: 1.15, // Fator reduzido para crescimento mais suave
-          reductionStart: 10, // Nível onde começa a redução de crescimento
-          reductionFactor: 0.9 // Fator de redução aplicado após reductionStart
+          growthFactor: 1.15,
+          reductionStart: 10,
+          reductionFactor: 0.9
         },
         platformDecor: [{
           x: 0,
@@ -434,7 +429,6 @@
           height: 20
         }]
       };
-      // Estado do jogo
       const gameState = {
         canvasWidth: CANVAS_WIDTH,
         canvasHeight: CANVAS_HEIGHT,
@@ -543,7 +537,7 @@
           name: 'Leech',
           desc: 'Roubo de Vida 3% do dano',
           rarity: 'uncommon',
-          maxStacks: 5,
+          maxStacks: 3,
           effect: (p) => {
             p.lifeSteal = (p.lifeSteal || 0) + 0.03;
           }
@@ -581,7 +575,7 @@
           name: 'Thunderbolt',
           desc: 'Chama 2 raios do céu',
           rarity: 'rare',
-          maxStacks: 5,
+          maxStacks: 3,
           effect: (p) => {
             p.thunderbolt = {
               count: (p.thunderbolt?.count || 0) + 2,
@@ -594,7 +588,7 @@
           name: 'Gush',
           desc: '+1 Pulo Adicional',
           rarity: 'rare',
-          maxStacks: 3,
+          maxStacks: 4,
           effect: (p) => {
             p.maxJumps = (p.maxJumps || 1) + 1;
           }
@@ -603,9 +597,9 @@
           name: 'Will-O-Wisp',
           desc: 'Invoca uma chama aliada',
           rarity: 'rare',
-          maxStacks: 5,
+          maxStacks: 6, // Alterado de 5 para 6
           effect: (p) => {
-            p.wispCount = (p.wispCount || 0) + 1;
+            p.wispCount = Math.min(6, (p.wispCount || 0) + 1);
           }
         },
         // Épicos
@@ -623,14 +617,16 @@
           name: 'Barrier',
           desc: 'Escudo bloqueador de dano',
           rarity: 'epic',
-          maxStacks: 5,
+          maxStacks: 3,
           effect: (p) => {
-            p.barrier = {
-              interval: 8,
-              timer: 0,
-              active: false,
-              count: (p.barrier?.count || 0) + 1
-            };
+            // Aumenta o máximo de escudos
+            p.barrier.maxShields = Math.min(3, (p.barrier.maxShields || 0) + 1);
+            // Se não tinha escudos ativos, ativa o primeiro
+            if (p.barrier.activeShields < p.barrier.maxShields) {
+              p.barrier.activeShields = p.barrier.maxShields;
+            }
+            // Reinicia o timer de regeneração
+            p.barrier.timer = 0;
           }
         }, {
           id: 'overheat',
@@ -657,7 +653,7 @@
           name: 'Thunderbolt+',
           desc: 'Chama 4 raios do céu',
           rarity: 'legendary',
-          maxStacks: 3,
+          maxStacks: 2,
           effect: (p) => {
             if (p.thunderbolt) {
               p.thunderbolt.count += 4;
@@ -710,7 +706,7 @@
           this.health = 100;
           this.maxHealth = 100;
           this.baseDamage = config.projectile.baseDamage;
-          this.damageBonuses = {}; // Alterado: agora é um objeto
+          this.damageBonuses = {};
           this.critChance = config.projectile.critChance;
           this.critMultiplier = config.projectile.critMultiplier;
           this.shootCooldown = config.player.shootCooldown;
@@ -719,7 +715,12 @@
           this.thunderbolt = null;
           this.wispCount = 0;
           this.fragmentation = 0;
-          this.barrier = null;
+          this.barrier = {
+            maxShields: 0, // Máximo de escudos que o jogador pode ter
+            activeShields: 0, // Escudos ativos no momento
+            timer: 0, // Tempo desde a última regeneração
+            interval: 8 // Intervalo para regenerar um escudo (em segundos)
+          };
           this.contactDamage = 0;
           this.revives = 0;
           this.extraChoices = 0;
@@ -777,15 +778,16 @@
               this.thunderbolt.timer = 0;
             }
           }
-          if (this.barrier) {
+          // Atualizar barreira (regeneração de escudos)
+          if (this.barrier.maxShields > 0) {
             this.barrier.timer += deltaTime;
-            if (this.barrier.timer >= this.barrier.interval) {
-              this.barrier.active = true;
+            if (this.barrier.timer >= this.barrier.interval && this.barrier.activeShields < this.barrier.maxShields) {
+              this.barrier.activeShields++;
               this.barrier.timer = 0;
             }
           }
-          // Atualizar Wisps
-          if (this.wispCount > gameState.wisps.length) {
+          // Atualizar Wisps com limite de 6
+          if (this.wispCount > gameState.wisps.length && gameState.wisps.length < 6) {
             gameState.wisps.push(new WillOWisp(gameState.wisps.length));
           }
         }
@@ -828,24 +830,24 @@
         }
         takeDamage(amount) {
           if (gameState.invincible > 0) return;
-          if (this.barrier && this.barrier.active) {
-            this.barrier.active = false;
+          if (this.barrier.activeShields > 0) {
+            this.barrier.activeShields--;
             this.barrier.timer = 0;
             return;
           }
           this.health -= amount;
           gameState.invincible = 0.5;
-          // Garantir que a vida não ultrapasse o máximo
           this.health = Math.min(this.health, this.maxHealth);
           if (this.health <= 0) {
             if (this.revives > 0) {
               this.revives--;
               this.health = this.maxHealth;
               gameState.invincible = 3.0;
-              // Matar todos os inimigos ao reviver
               gameState.enemies = [];
               gameState.enemyProjectiles = [];
               gameState.particles = [];
+              // ADICIONAR: Remover tela de game over se estiver visível
+              document.getElementById('gameOverScreen').style.display = 'none';
             } else {
               gameState.gameOver = true;
               document.getElementById('gameOverScreen').style.display = 'flex';
@@ -857,17 +859,23 @@
           // Desenhar jogador
           ctx.fillStyle = gameState.invincible > 0 ? 'rgba(213, 138, 73, 0.5)' : '#d58a49';
           ctx.fillRect(this.x, this.y, this.width, this.height);
-          // Desenhar olhos
           ctx.fillStyle = '#e9c6b6';
           ctx.fillRect(this.x + 5, this.y + 10, 8, 8);
           ctx.fillRect(this.x + this.width - 13, this.y + 10, 8, 8);
-          // Desenhar barreira se ativa
-          if (this.barrier && this.barrier.active) {
-            ctx.strokeStyle = '#8899a6';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.width + 10, 0, Math.PI * 2);
-            ctx.stroke();
+          // Desenhar barreira com círculos concêntricos (um por escudo ativo)
+          if (this.barrier.activeShields > 0) {
+            const centerX = this.x + this.width / 2;
+            const centerY = this.y + this.height / 2;
+            // Desenhar um círculo para cada escudo ativo
+            for (let i = 0; i < this.barrier.activeShields; i++) {
+              const radius = this.width + 15 + (i * 10); // Raio crescente
+              const alpha = 0.8 - (i * 0.2); // Transparência decrescente
+              ctx.strokeStyle = `rgba(136, 153, 166, ${alpha})`;
+              ctx.lineWidth = 2;
+              ctx.beginPath();
+              ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+              ctx.stroke();
+            }
           }
         }
       }
@@ -875,7 +883,11 @@
       class WillOWisp {
         constructor(index) {
           this.radius = 12;
-          this.offsetAngle = (index / 3) * Math.PI * 2;
+          this.offsetAngle = (index / 6) * Math.PI * 2; // Distribuição uniforme
+          // Velocidade angular única para cada Wisp
+          this.angularSpeed = 0.5 + Math.random() * 2; // Entre 0.5 e 2.5
+          // Distância variável para melhor visualização
+          this.distance = 40 + Math.random() * 30; // Entre 40 e 70
           this.shootTimer = 0;
           this.shootCooldown = 1.5;
         }
@@ -888,7 +900,6 @@
           }
         }
         shoot() {
-          // Encontrar o inimigo mais próximo
           let closestEnemy = null;
           let minDistance = Infinity;
           for (const enemy of gameState.enemies) {
@@ -915,13 +926,12 @@
           }
         }
         get x() {
-          return gameState.player.x + gameState.player.width / 2 + Math.cos(this.offsetAngle + gameState.gameTime * 2) * 50;
+          return gameState.player.x + gameState.player.width / 2 + Math.cos(this.offsetAngle + gameState.gameTime * this.angularSpeed) * this.distance;
         }
         get y() {
-          return gameState.player.y + gameState.player.height / 2 + Math.sin(this.offsetAngle + gameState.gameTime * 2) * 50;
+          return gameState.player.y + gameState.player.height / 2 + Math.sin(this.offsetAngle + gameState.gameTime * this.angularSpeed) * this.distance;
         }
         draw(ctx) {
-          // Garantir que a Will-O-Wisp fique dentro da tela
           const canvasX = Math.max(this.radius, Math.min(this.x, gameState.canvasWidth - this.radius));
           const canvasY = Math.max(this.radius, Math.min(this.y, gameState.canvasHeight - this.radius));
           // Desenhar Will-O-Wisp
@@ -936,88 +946,221 @@
           ctx.fill();
         }
       }
-      // Classe Enemy
-      class Enemy {
-        constructor() {
-          this.width = config.enemy.width;
-          this.height = config.enemy.height;
-          this.x = Math.random() * (gameState.canvasWidth - this.width);
-          this.y = -this.height;
-          this.velY = config.enemy.moveSpeed;
-          this.following = false;
-          this.health = 20 + gameState.wave * 3;
-          this.maxHealth = 20 + gameState.wave * 3;
-          this.shootTimer = 0;
-          this.targetX = this.x;
-          this.targetY = config.enemy.minHeight;
-          this.directionX = Math.random() > 0.5 ? 1 : -1;
-          this.startHeight = 0;
-        }
-        update(deltaTime) {
-          if (gameState.isPaused || gameState.isLevelUp) return;
-          if (!this.following) {
-            // Movimento horizontal
-            const dx = this.targetX - (this.x + this.width / 2);
-            this.x += dx * 0.003 * deltaTime * 60;
-            // Movimento vertical com limite
-            this.y += this.velY * deltaTime;
-            // Não permitir descer abaixo da altura mínima
-            if (this.y >= config.enemy.minHeight) {
-              this.y = config.enemy.minHeight;
-              this.following = true;
-              this.startHeight = this.y;
-            }
-            // Mudar direção ocasionalmente
-            if (Math.random() < 0.01) {
-              this.directionX = Math.random() > 0.5 ? 1 : -1;
-            }
-            this.targetX += this.directionX * 2 * deltaTime * 60;
-            // Limitar ao canvas
-            this.targetX = Math.max(50, Math.min(this.targetX, gameState.canvasWidth - 50));
-            // Atirar durante a descida
-            this.shootTimer += deltaTime;
-            if (this.shootTimer > 1 / config.enemy.shootCooldown) {
-              this.shoot();
-              this.shootTimer = 0;
-            }
-          } else {
-            // Seguir o jogador mantendo altura
-            const dx = gameState.player.x + gameState.player.width / 2 - (this.x + this.width / 2);
-            // Movimento horizontal
-            this.x += dx * 0.005 * deltaTime * 60;
-            // Manter a altura inicial
-            this.y = this.startHeight;
-            // Atirar periodicamente
-            this.shootTimer += deltaTime;
-            if (this.shootTimer > 1 / config.enemy.shootCooldown) {
-              this.shoot();
-              this.shootTimer = 0;
-            }
+      // Tipos de inimigos ATUALIZADOS (alturas mínimas ajustadas)
+      // Reduzir globalmente a velocidade de tiro dos inimigos para 20% do atual
+      const enemyTypes = [{
+    name: "Fast",
+    width: 25,
+    height: 25,
+    color: "#954e3f",
+    moveSpeed: 180,
+    projectileSpeed: 150,
+    shootCooldown: 1.4, // 
+    projectileDamage: 8,
+    baseHealth: 15,
+    minHeightRatio: 0.5,
+    projectileCount: 1,
+    behavior: "aggressive"
+  }, {
+    name: "Standard",
+    width: 40,
+    height: 40,
+    color: "#954e3f",
+    moveSpeed: 120,
+    projectileSpeed: 120,
+    shootCooldown: 1.7, // 5.0 * 3
+    projectileDamage: 10,
+    baseHealth: 20,
+    minHeightRatio: 0.5,
+    projectileCount: 1,
+    behavior: "balanced"
+  }, {
+    name: "Tank",
+    width: 60,
+    height: 60,
+    color: "#35150c",
+    moveSpeed: 80,
+    projectileSpeed: 100,
+    shootCooldown: 2.0, // 6.0 * 3
+    projectileDamage: 15,
+    baseHealth: 40,
+    minHeightRatio: 0.45,
+    projectileCount: 1,
+    behavior: "defensive"
+  }, {
+    name: "Sniper",
+    width: 35,
+    height: 35,
+    color: "#4e6278",
+    moveSpeed: 100,
+    projectileSpeed: 200,
+    shootCooldown: 2.5, // 7.5 * 3
+    projectileDamage: 20,
+    baseHealth: 25,
+    minHeightRatio: 0.55,
+    projectileCount: 1,
+    behavior: "longrange"
+  }, {
+    name: "Swarm",
+    width: 20,
+    height: 20,
+    color: "#a96c5a",
+    moveSpeed: 160,
+    projectileSpeed: 100,
+    shootCooldown: 1.4, // 4.0 * 3
+    projectileDamage: 5,
+    baseHealth: 10,
+    minHeightRatio: 0.6,
+    projectileCount: 2,
+    behavior: "swarming"
+  }, {
+    name: "DoubleShooter",
+    width: 45,
+    height: 45,
+    color: "#8d6651",
+    moveSpeed: 110,
+    projectileSpeed: 130,
+    shootCooldown: 1.7, // 5.0 * 3
+    projectileDamage: 7.5,
+    baseHealth: 30,
+    minHeightRatio: 0.5,
+    projectileCount: 2,
+    behavior: "suppressive"
+  }];
+      // Probabilidades de cada tipo
+      const enemyProbabilities = [0.15, 0.30, 0.15, 0.15, 0.15, 0.10];
+      // Função para escolher um tipo de inimigo
+      function getRandomEnemyType() {
+        const rand = Math.random();
+        let cumulative = 0;
+        for (let i = 0; i < enemyTypes.length; i++) {
+          cumulative += enemyProbabilities[i];
+          if (rand < cumulative) {
+            return enemyTypes[i];
           }
-          // Limitar ao canvas
-          if (this.x < 0) this.x = 0;
-          if (this.x > gameState.canvasWidth - this.width) this.x = gameState.canvasWidth - this.width;
-          if (this.y < 0) this.y = 0;
-          if (this.y > gameState.canvasHeight - this.height) this.y = gameState.canvasHeight - this.height;
         }
-        shoot() {
-          const angle = Math.atan2(
-            (gameState.player.y + gameState.player.height / 2) - (this.y + this.height / 2),
-            (gameState.player.x + gameState.player.width / 2) - (this.x + this.width / 2));
-          gameState.enemyProjectiles.push({
-            x: this.x + this.width / 2,
-            y: this.y + this.height / 2,
-            velX: Math.cos(angle) * config.enemy.projectileSpeed,
-            velY: Math.sin(angle) * config.enemy.projectileSpeed,
-            radius: 6,
-            damage: config.enemy.projectileDamage
-          });
+        return enemyTypes[1]; // Standard como padrão
+      }
+      // Classe Enemy atualizada
+      class Enemy {
+    constructor() {
+      const type = getRandomEnemyType();
+      // Propriedades baseadas no tipo
+      this.type = type;
+      this.width = type.width;
+      this.height = type.height;
+      this.color = type.color;
+      this.moveSpeed = type.moveSpeed;
+      this.projectileSpeed = type.projectileSpeed;
+      this.shootCooldown = type.shootCooldown;
+      this.projectileDamage = type.projectileDamage;
+      this.projectileCount = type.projectileCount;
+      this.x = Math.random() * (gameState.canvasWidth - this.width);
+      this.y = -this.height;
+      this.velY = this.moveSpeed;
+      this.following = false;
+      this.health = type.baseHealth + gameState.wave * 3;
+      this.maxHealth = this.health;
+      this.shootTimer = 0;
+      this.behavior = type.behavior;
+      this.targetY = gameState.canvasHeight * type.minHeightRatio;
+      this.maxFollowHeight = gameState.canvasHeight * 0.7;
+      this.startHeight = 0;
+    }
+    
+    update(deltaTime) {
+      if (gameState.isPaused || gameState.isLevelUp) return;
+      
+      // Calcular distância para o jogador
+      const dx = gameState.player.x + gameState.player.width / 2 - (this.x + this.width / 2);
+      const dy = gameState.player.y + gameState.player.height / 2 - (this.y + this.height / 2);
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      // MOVIMENTO HORIZONTAL - AGORA APLICADO TAMBÉM DURANTE A DESCIDA
+      const targetX = gameState.player.x + gameState.player.width / 2;
+      const speedFactor = Math.max(0.5, 1 - (this.width / 100));
+      const moveStrength = this.following ? 0.003 : 0.001; // 1/3 da velocidade durante descida
+      
+      this.x += (targetX - (this.x + this.width / 2)) * moveStrength * deltaTime * 60 * speedFactor;
+
+      if (!this.following) {
+        // Movimento vertical
+        this.y += this.velY * deltaTime * 0.7;
+        
+        // Não permitir descer abaixo da altura mínima
+        if (this.y >= this.targetY) {
+          this.y = this.targetY;
+          this.following = true;
+          this.startHeight = this.y;
         }
+      } else {
+        // Manter altura inicial quando estiver seguindo
+        this.y = this.startHeight;
+      }
+      
+      // Lógica de disparo
+      this.shootTimer += deltaTime;
+      
+      switch (this.behavior) {
+        case "longrange":
+          if (distance > 400 && this.shootTimer >= this.shootCooldown) {
+            this.shoot();
+          }
+          break;
+        case "suppressive":
+          if (this.shootTimer >= this.shootCooldown * 0.7) {
+            this.shoot();
+          }
+          break;
+        default:
+          if (this.shootTimer >= this.shootCooldown) {
+            this.shoot();
+          }
+      }
+      
+      if (this.shootTimer >= this.shootCooldown) {
+        this.shootTimer = 0;
+      }
+
+      // Limitar ao canvas
+      if (this.x < 0) this.x = 0;
+      if (this.x > gameState.canvasWidth - this.width) this.x = gameState.canvasWidth - this.width;
+      if (this.y < 100) this.y = 100;
+      if (this.y > gameState.canvasHeight - this.height) this.y = gameState.canvasHeight - this.height;
+    }
+    
+    shoot() {
+      const angle = Math.atan2(
+        (gameState.player.y + gameState.player.height / 2) - (this.y + this.height / 2),
+        (gameState.player.x + gameState.player.width / 2) - (this.x + this.width / 2));
+      
+      const maxProjectiles = Math.min(3, this.projectileCount);
+      for (let i = 0; i < maxProjectiles; i++) {
+        let projAngle = angle;
+        
+        if (this.projectileCount > 1) {
+          const spread = Math.PI / 16;
+          projAngle = angle - spread / 2 + (spread * i / (this.projectileCount - 1));
+        }
+        
+        gameState.enemyProjectiles.push({
+          x: this.x + this.width / 2,
+          y: this.y + this.height / 2,
+          velX: Math.cos(projAngle) * this.projectileSpeed,
+          velY: Math.sin(projAngle) * this.projectileSpeed,
+          radius: 6, // TAMANHO FIXO PARA TODOS OS PROJÉTEIS
+          damage: this.projectileDamage
+        });
+      }
+      
+      this.shootTimer = 0;
+    }
         takeDamage(amount) {
+          // Inimigos grandes tomam menos dano? Talvez não, mas podemos ajustar se necessário
           this.health -= amount;
           if (this.health <= 0) {
-            // Adicionar EXP e pontuação
-            const expGain = 10 + gameState.wave * 2;
+            // Adicionar EXP e pontuação baseadas no tipo de inimigo
+            const expGain = 10 + gameState.wave * 2 * (this.width / 40);
             gameState.exp += expGain;
             gameState.score += expGain;
             // Verificar se subiu de nível
@@ -1062,7 +1205,7 @@
           return false;
         }
         draw(ctx) {
-          ctx.fillStyle = '#954e3f';
+          ctx.fillStyle = this.color;
           ctx.fillRect(this.x, this.y, this.width, this.height);
           // Desenhar olhos
           ctx.fillStyle = '#e9c6b6';
@@ -1141,6 +1284,12 @@
           option.dataset.index = i;
           option.innerHTML = `
             
+								
+								
+								
+								
+								
+								
 								<div class="upgrade-name rarity-${upgrade.rarity}">${upgrade.name} — ${upgrade.desc}</div>
 								<div class="upgrade-desc">${upgrade.desc}</div>`;
           option.addEventListener('click', () => applyUpgrade(i));
@@ -1192,14 +1341,20 @@
         gameState.isPaused = !gameState.isPaused;
         document.getElementById('pauseOverlay').style.display = gameState.isPaused ? 'flex' : 'none';
       }
-      // Atualizar painel de debug
+      // Atualização do painel de debug
       function updateDebugPanel() {
         const debugPanel = document.getElementById('debugPanel');
         if (!debugPanel) return;
         let debugHTML = `
           
+								
+								
+								
+								
+								
 								<h3>DEBUG INFO</h3>
 								<p>Vida: ${Math.floor(gameState.player.health)}/${gameState.player.maxHealth}</p>
+								<p>Barrier: ${gameState.player.barrier.activeShields}/${gameState.player.barrier.maxShields}</p>
 								<p>EXP: ${gameState.exp}/${gameState.expToNextLevel}</p>
 								<p>Level: ${gameState.level}</p>
 								<p>Wave: ${gameState.wave}</p>
@@ -1219,16 +1374,34 @@
           if (gameState.upgradeStacks[id] > 0) {
             const upgrade = upgrades.find(u => u.id === id);
             debugHTML += `
+								
+								
+								
+								
+								
+								
 								<p>${upgrade.name}: ${gameState.upgradeStacks[id]}</p>`;
           }
         }
         // Mostrar bônus de dano individuais
         if (Object.keys(gameState.player.damageBonuses).length > 0) {
           debugHTML += `
+								
+								
+								
+								
+								
+								
 								<h4>Bônus de Dano:</h4>`;
           for (const id in gameState.player.damageBonuses) {
             const upgrade = upgrades.find(u => u.id === id);
             debugHTML += `
+								
+								
+								
+								
+								
+								
 								<p>${upgrade.name}: +${gameState.player.damageBonuses[id]} dano</p>`;
           }
         }
@@ -1236,6 +1409,18 @@
       }
       // Loop principal do jogo
       function gameLoop(currentTime) {
+        if (gameState.gameOver) {
+          return;
+        }
+        // ADICIONE ESTA VERIFICAÇÃO:
+        if (gameState.gameOver || (gameState.player && gameState.player.health <= 0)) {
+          if (!gameState.gameOver) {
+            gameState.gameOver = true;
+            document.getElementById('gameOverScreen').style.display = 'flex';
+            document.getElementById('finalScore').textContent = `Pontuação: ${gameState.score}`;
+          }
+          return;
+        }
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         // Calcular delta time
@@ -1362,8 +1547,8 @@
             // Atualizar tempo de jogo
             gameState.gameTime += deltaTime;
             gameState.waveTime += deltaTime;
-            // Avançar de wave a cada 30 segundos
-            if (gameState.waveTime > 30) {
+            // Avançar de wave a cada 15 segundos
+            if (gameState.waveTime > 15) {
               gameState.wave++;
               gameState.waveTime = 0;
             }
