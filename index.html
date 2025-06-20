@@ -25,6 +25,8 @@
         overflow: hidden;
         color: #e9c6b6;
         padding: 20px;
+        position: relative;
+        /* Adicionado para posicionar o debug panel */
       }
 
       #gameHeader {
@@ -47,7 +49,7 @@
         padding: 15px;
         border-radius: 10px;
         text-align: center;
-        max-width: 800px;
+        max-width: 1600px;
         margin: 0 auto;
         border: 1px solid #523a35;
         color: #ca9385;
@@ -56,7 +58,7 @@
 
       #gameContainer {
         position: relative;
-        width: 800px;
+        width: 960px;
         height: 600px;
         box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
         border-radius: 10px;
@@ -67,6 +69,8 @@
       #gameCanvas {
         background: linear-gradient(to bottom, #27262d, #110e0e);
         display: block;
+        width: 960px;
+        height: 600px;
       }
 
       #uiOverlay {
@@ -125,6 +129,8 @@
         z-index: 100;
         color: #e9c6b6;
         font-size: 24px;
+        overflow-y: auto;
+        padding: 20px;
       }
 
       #levelUpTitle {
@@ -138,12 +144,13 @@
         background: rgba(53, 21, 12, 0.8);
         border: 2px solid #977e79;
         border-radius: 10px;
-        padding: 20px;
-        margin: 15px;
-        width: 80%;
+        padding: 15px;
+        margin: 10px;
+        width: 90%;
         cursor: pointer;
         transition: all 0.3s;
         text-align: center;
+        max-width: 900px;
       }
 
       .upgrade-option:hover {
@@ -153,14 +160,14 @@
       }
 
       .upgrade-name {
-        font-size: 22px;
+        font-size: 20px;
         font-weight: 400;
         color: #e9c6b6;
-        margin-bottom: 10px;
+        margin-bottom: 8px;
       }
 
       .upgrade-desc {
-        font-size: 18px;
+        font-size: 16px;
         color: #ca9385;
       }
 
@@ -286,6 +293,23 @@
         text-shadow: 0 0 10px rgba(213, 138, 73, 0.7);
         margin-bottom: 20px;
       }
+
+      /* Painel de debug - AGORA FORA DO CONTAINER */
+      #debugPanel {
+        position: absolute;
+        top: 150px;
+        /* Posição abaixo do cabeçalho */
+        right: 20px;
+        background: rgba(39, 38, 45, 0.8);
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #523a35;
+        color: #e9c6b6;
+        font-family: monospace;
+        font-size: 14px;
+        max-width: 300px;
+        z-index: 20;
+      }
     </style>
   </head>
   <body>
@@ -296,7 +320,7 @@
       </div>
     </div>
     <div id="gameContainer">
-      <canvas id="gameCanvas" width="800" height="600"></canvas>
+      <canvas id="gameCanvas"></canvas>
       <div id="uiOverlay">
         <div class="health-bar">
           <div class="health-fill" id="healthFill"></div>
@@ -311,18 +335,6 @@
       </div>
       <div id="levelUpScreen">
         <div id="levelUpTitle">NÍVEL AUMENTADO!</div>
-        <div class="upgrade-option" data-index="0">
-          <div class="upgrade-name rarity-common">Catalyst — Dano do Projétil +2</div>
-          <div class="upgrade-desc">Aumenta o dano base dos seus projéteis</div>
-        </div>
-        <div class="upgrade-option" data-index="1">
-          <div class="upgrade-name rarity-uncommon">Eyesight — Chance Crítica +5%</div>
-          <div class="upgrade-desc">Aumenta a chance de causar dano crítico</div>
-        </div>
-        <div class="upgrade-option" data-index="2">
-          <div class="upgrade-name rarity-rare">Thunderbolt — Raios do céu</div>
-          <div class="upgrade-desc">Chama 2 raios em posições aleatórias</div>
-        </div>
       </div>
       <div id="startScreen">
         <button id="startButton">COMEÇAR JOGO</button>
@@ -337,22 +349,27 @@
         <p>Clique novamente para continuar</p>
       </div>
     </div>
+    <!-- DEBUG PANEL MOVED OUTSIDE GAME CONTAINER -->
+    <div id="debugPanel"></div>
     <script>
+      // ===== DIMENSÕES DO CANVAS =====
+      const CANVAS_WIDTH = 960;
+      const CANVAS_HEIGHT = 600;
       // CONFIGURAÇÕES BALANCEADAS
       const config = {
         player: {
           width: 30,
           height: 50,
-          speed: 200, // Agora em pixels por segundo
-          jumpForce: 400, // Agora em pixels por segundo
-          gravity: 1000, // Agora em pixels por segundo²
+          speed: 200,
+          jumpForce: 400,
+          gravity: 1000,
           friction: 0.9,
           maxHealth: 100,
           shootCooldown: 0.2,
-          minShootCooldown: 0.05 // LIMITE MÍNIMO ADICIONADO
+          minShootCooldown: 0.05
         },
         projectile: {
-          speed: 600, // Aumentado em 50% (era 400)
+          speed: 600,
           radius: 6,
           baseDamage: 10,
           critChance: 0.2,
@@ -361,36 +378,37 @@
         enemy: {
           width: 40,
           height: 40,
-          spawnRate: 1.5, // Inimigos por segundo
-          moveSpeed: 120, // Agora em pixels por segundo
-          minHeight: 300, // 50% da altura do canvas (aumentado de 180)
-          shootCooldown: 0.33, // Reduzido para 1/3 (era 1)
-          projectileSpeed: 120, // Reduzido para 60% (era 200)
+          spawnRate: 1.5,
+          moveSpeed: 120,
+          minHeight: CANVAS_HEIGHT * 0.5,
+          shootCooldown: 0.33,
+          projectileSpeed: 120,
           projectileDamage: 10,
-          minDistance: 200 // Aumentado para manter distância
+          minDistance: 200
         },
         exp: {
           baseLevelUp: 100,
-          growthFactor: 1.2
+          growthFactor: 1.15, // Fator reduzido para crescimento mais suave
+          reductionStart: 10, // Nível onde começa a redução de crescimento
+          reductionFactor: 0.9 // Fator de redução aplicado após reductionStart
         },
-        // Plataformas como decoração (sem colisão)
         platformDecor: [{
           x: 0,
           y: 500,
           width: 200,
           height: 20
         }, {
-          x: 220,
+          x: 250,
           y: 450,
           width: 150,
           height: 20
         }, {
-          x: 400,
+          x: 450,
           y: 400,
           width: 150,
           height: 20
         }, {
-          x: 580,
+          x: 650,
           y: 450,
           width: 150,
           height: 20
@@ -410,7 +428,7 @@
           width: 150,
           height: 20
         }, {
-          x: 600,
+          x: 650,
           y: 300,
           width: 200,
           height: 20
@@ -418,6 +436,8 @@
       };
       // Estado do jogo
       const gameState = {
+        canvasWidth: CANVAS_WIDTH,
+        canvasHeight: CANVAS_HEIGHT,
         player: null,
         enemies: [],
         projectiles: [],
@@ -446,9 +466,9 @@
         isPaused: false,
         selectedUpgrades: new Set(),
         lastFrameTime: 0,
-        upgradeStacks: {} // Novo objeto para rastrear stacks
+        upgradeStacks: {}
       };
-      // Sistema de upgrades com stacks CORRIGIDO
+      // Sistema de upgrades
       const upgrades = [
         // Comuns
         {
@@ -458,8 +478,8 @@
           rarity: 'common',
           maxStacks: 10,
           effect: (p, stacks) => {
-            p.damageBonus = 2 * stacks;
-          }
+            p.damageBonuses['catalyst'] = 2 * stacks;
+          } // Alterado
         }, {
           id: 'growth',
           name: 'Growth',
@@ -543,10 +563,10 @@
           name: 'Catalyst+',
           desc: 'Dano do Projétil +4',
           rarity: 'rare',
-          maxStacks: 5, // LIMITE ADICIONADO
-          effect: (p) => {
-            p.damageBonus += 4;
-          }
+          maxStacks: 5,
+          effect: (p, stacks) => {
+            p.damageBonuses['catalyst+'] = 4 * stacks;
+          } // Alterado
         }, {
           id: 'swift+',
           name: 'Swift+',
@@ -674,8 +694,8 @@
         constructor() {
           this.width = config.player.width;
           this.height = config.player.height;
-          this.x = 400;
-          this.y = 300;
+          this.x = gameState.canvasWidth / 2 - this.width / 2;
+          this.y = gameState.canvasHeight / 2 - this.height / 2;
           this.velX = 0;
           this.velY = 0;
           this.baseSpeed = config.player.speed;
@@ -690,7 +710,7 @@
           this.health = 100;
           this.maxHealth = 100;
           this.baseDamage = config.projectile.baseDamage;
-          this.damageBonus = 0;
+          this.damageBonuses = {}; // Alterado: agora é um objeto
           this.critChance = config.projectile.critChance;
           this.critMultiplier = config.projectile.critMultiplier;
           this.shootCooldown = config.player.shootCooldown;
@@ -703,7 +723,7 @@
           this.contactDamage = 0;
           this.revives = 0;
           this.extraChoices = 0;
-          this.attackSpeedMultiplier = 1; // Novo multiplicador
+          this.attackSpeedMultiplier = 1;
         }
         get speed() {
           return this.baseSpeed * this.speedMultiplier;
@@ -712,7 +732,12 @@
           return this.baseJumpForce * this.jumpMultiplier;
         }
         get damage() {
-          return this.baseDamage + this.damageBonus;
+          // Calcula o dano total somando todos os bônus
+          let totalBonus = 0;
+          for (const id in this.damageBonuses) {
+            totalBonus += this.damageBonuses[id];
+          }
+          return this.baseDamage + totalBonus;
         }
         update(deltaTime) {
           if (gameState.isPaused || gameState.isLevelUp) return;
@@ -731,9 +756,9 @@
           this.y += this.velY * deltaTime;
           // Limitar ao canvas
           if (this.x < 0) this.x = 0;
-          if (this.x > 800 - this.width) this.x = 800 - this.width;
-          if (this.y > 600 - this.height) {
-            this.y = 600 - this.height;
+          if (this.x > gameState.canvasWidth - this.width) this.x = gameState.canvasWidth - this.width;
+          if (this.y > gameState.canvasHeight - this.height) {
+            this.y = gameState.canvasHeight - this.height;
             this.velY = 0;
             this.grounded = true;
             this.jumps = 0;
@@ -788,8 +813,7 @@
         }
         castThunderbolt() {
           for (let i = 0; i < this.thunderbolt.count; i++) {
-            // Raios em posições aleatórias
-            const randomX = Math.random() * 700 + 50;
+            const randomX = Math.random() * (gameState.canvasWidth - 100) + 50;
             gameState.projectiles.push({
               x: randomX,
               y: 0,
@@ -811,11 +835,13 @@
           }
           this.health -= amount;
           gameState.invincible = 0.5;
+          // Garantir que a vida não ultrapasse o máximo
+          this.health = Math.min(this.health, this.maxHealth);
           if (this.health <= 0) {
             if (this.revives > 0) {
               this.revives--;
               this.health = this.maxHealth;
-              gameState.invincible = 3.0; // CORREÇÃO ADICIONADA
+              gameState.invincible = 3.0;
               // Matar todos os inimigos ao reviver
               gameState.enemies = [];
               gameState.enemyProjectiles = [];
@@ -896,8 +922,8 @@
         }
         draw(ctx) {
           // Garantir que a Will-O-Wisp fique dentro da tela
-          const canvasX = Math.max(this.radius, Math.min(this.x, 800 - this.radius));
-          const canvasY = Math.max(this.radius, Math.min(this.y, 600 - this.radius));
+          const canvasX = Math.max(this.radius, Math.min(this.x, gameState.canvasWidth - this.radius));
+          const canvasY = Math.max(this.radius, Math.min(this.y, gameState.canvasHeight - this.radius));
           // Desenhar Will-O-Wisp
           ctx.fillStyle = '#e6b077';
           ctx.beginPath();
@@ -915,7 +941,7 @@
         constructor() {
           this.width = config.enemy.width;
           this.height = config.enemy.height;
-          this.x = Math.random() * (800 - this.width);
+          this.x = Math.random() * (gameState.canvasWidth - this.width);
           this.y = -this.height;
           this.velY = config.enemy.moveSpeed;
           this.following = false;
@@ -930,16 +956,16 @@
         update(deltaTime) {
           if (gameState.isPaused || gameState.isLevelUp) return;
           if (!this.following) {
-            // Movimento horizontal reduzido em 70%
+            // Movimento horizontal
             const dx = this.targetX - (this.x + this.width / 2);
-            this.x += dx * 0.003 * deltaTime * 60; // Reduzido em 70%
+            this.x += dx * 0.003 * deltaTime * 60;
             // Movimento vertical com limite
             this.y += this.velY * deltaTime;
-            // Não permitir descer abaixo de 50% da altura
+            // Não permitir descer abaixo da altura mínima
             if (this.y >= config.enemy.minHeight) {
               this.y = config.enemy.minHeight;
               this.following = true;
-              this.startHeight = this.y; // Armazenar altura inicial
+              this.startHeight = this.y;
             }
             // Mudar direção ocasionalmente
             if (Math.random() < 0.01) {
@@ -947,7 +973,7 @@
             }
             this.targetX += this.directionX * 2 * deltaTime * 60;
             // Limitar ao canvas
-            this.targetX = Math.max(50, Math.min(this.targetX, 750));
+            this.targetX = Math.max(50, Math.min(this.targetX, gameState.canvasWidth - 50));
             // Atirar durante a descida
             this.shootTimer += deltaTime;
             if (this.shootTimer > 1 / config.enemy.shootCooldown) {
@@ -957,9 +983,8 @@
           } else {
             // Seguir o jogador mantendo altura
             const dx = gameState.player.x + gameState.player.width / 2 - (this.x + this.width / 2);
-            const distance = Math.abs(dx);
-            // Movimento horizontal reduzido em 70%
-            this.x += dx * 0.005 * deltaTime * 60; // Reduzido em 70%
+            // Movimento horizontal
+            this.x += dx * 0.005 * deltaTime * 60;
             // Manter a altura inicial
             this.y = this.startHeight;
             // Atirar periodicamente
@@ -971,9 +996,9 @@
           }
           // Limitar ao canvas
           if (this.x < 0) this.x = 0;
-          if (this.x > 800 - this.width) this.x = 800 - this.width;
+          if (this.x > gameState.canvasWidth - this.width) this.x = gameState.canvasWidth - this.width;
           if (this.y < 0) this.y = 0;
-          if (this.y > 600 - this.height) this.y = 600 - this.height;
+          if (this.y > gameState.canvasHeight - this.height) this.y = gameState.canvasHeight - this.height;
         }
         shoot() {
           const angle = Math.atan2(
@@ -998,8 +1023,8 @@
             // Verificar se subiu de nível
             if (gameState.exp >= gameState.expToNextLevel) {
               gameState.level++;
-              gameState.exp -= gameState.expToNextLevel;
-              gameState.expToNextLevel = Math.floor(config.exp.baseLevelUp * Math.pow(config.exp.growthFactor, gameState.level - 1));
+              gameState.expToNextLevel = calculateExpToNextLevel(gameState.level);
+              gameState.exp = 0; // Reinicia a experiência, mantendo qualquer excedente
               gameState.isLevelUp = true;
               document.getElementById('levelUpScreen').style.display = 'flex';
               generateUpgradeOptions();
@@ -1051,8 +1076,21 @@
           ctx.fillRect(this.x, this.y - 10, this.width * healthPercent, 5);
         }
       }
-      // Inicialização do jogo - CORREÇÃO ADICIONADA
+      // Função para calcular a experiência necessária para o próximo nível
+      function calculateExpToNextLevel(level) {
+        // Experiência base para os primeiros níveis
+        if (level <= config.exp.reductionStart) {
+          return Math.floor(config.exp.baseLevelUp * Math.pow(config.exp.growthFactor, level - 1));
+        }
+        // Aplica redução progressiva após o nível de redução
+        const reduction = Math.pow(config.exp.reductionFactor, level - config.exp.reductionStart);
+        return Math.floor(config.exp.baseLevelUp * Math.pow(config.exp.growthFactor, level - 1) * reduction);
+      }
+      // Inicialização do jogo
       function initGame() {
+        const canvas = document.getElementById('gameCanvas');
+        canvas.width = gameState.canvasWidth;
+        canvas.height = gameState.canvasHeight;
         gameState.player = new Player();
         gameState.enemies = [];
         gameState.projectiles = [];
@@ -1072,15 +1110,16 @@
         gameState.waveTime = 0;
         gameState.invincible = 0;
         gameState.isPaused = false;
-        gameState.selectedUpgrades = new Set(); // RESETAR UPGRADES SELECIONADOS
-        gameState.upgradeStacks = {}; // RESETAR CONTADORES DE STACKS
+        gameState.selectedUpgrades = new Set();
+        gameState.upgradeStacks = {};
         gameState.lastFrameTime = performance.now();
+        gameState.expToNextLevel = calculateExpToNextLevel(gameState.level);
         document.getElementById('startScreen').style.display = 'none';
         document.getElementById('levelUpScreen').style.display = 'none';
         document.getElementById('gameOverScreen').style.display = 'none';
         document.getElementById('pauseOverlay').style.display = 'none';
       }
-
+      // Gerar opções de upgrade
       function generateUpgradeOptions() {
         const container = document.getElementById('levelUpScreen');
         const numChoices = 3 + (gameState.player.extraChoices || 0);
@@ -1101,6 +1140,7 @@
           option.className = 'upgrade-option';
           option.dataset.index = i;
           option.innerHTML = `
+            
 								<div class="upgrade-name rarity-${upgrade.rarity}">${upgrade.name} — ${upgrade.desc}</div>
 								<div class="upgrade-desc">${upgrade.desc}</div>`;
           option.addEventListener('click', () => applyUpgrade(i));
@@ -1108,14 +1148,14 @@
           gameState.currentUpgrades.push(upgrade);
         }
       }
-      // Função para aplicar upgrade modificada - CORREÇÃO PRINCIPAL
+      // Função para aplicar upgrade
       function applyUpgrade(index) {
         const upgrade = gameState.currentUpgrades[index];
         // Inicializar contador de stacks se necessário
         if (!gameState.upgradeStacks[upgrade.id]) {
           gameState.upgradeStacks[upgrade.id] = 0;
         }
-        // Verificar limite APENAS se maxStacks estiver definido
+        // Verificar limite
         if (upgrade.maxStacks && gameState.upgradeStacks[upgrade.id] >= upgrade.maxStacks) {
           alert(`Você atingiu o limite máximo (${upgrade.maxStacks}) para este upgrade!`);
           return;
@@ -1152,6 +1192,48 @@
         gameState.isPaused = !gameState.isPaused;
         document.getElementById('pauseOverlay').style.display = gameState.isPaused ? 'flex' : 'none';
       }
+      // Atualizar painel de debug
+      function updateDebugPanel() {
+        const debugPanel = document.getElementById('debugPanel');
+        if (!debugPanel) return;
+        let debugHTML = `
+          
+								<h3>DEBUG INFO</h3>
+								<p>Vida: ${Math.floor(gameState.player.health)}/${gameState.player.maxHealth}</p>
+								<p>EXP: ${gameState.exp}/${gameState.expToNextLevel}</p>
+								<p>Level: ${gameState.level}</p>
+								<p>Wave: ${gameState.wave}</p>
+								<p>Pontuação: ${gameState.score}</p>
+								<p>Dano: ${gameState.player.damage}</p>
+								<p>Velocidade: ${gameState.player.speed.toFixed(1)}</p>
+								<p>Pulos: ${gameState.player.jumps}/${gameState.player.maxJumps}</p>
+								<p>Crítico: ${(gameState.player.critChance * 100).toFixed(1)}% (x${gameState.player.critMultiplier.toFixed(1)})</p>
+								<p>Vel. Ataque: ${(1 / gameState.player.shootCooldown).toFixed(1)}/s</p>
+								<p>Roubo de Vida: ${(gameState.player.lifeSteal * 100).toFixed(1)}%</p>
+								<p>Dano Contato: ${gameState.player.contactDamage}</p>
+								<p>Revives: ${gameState.player.revives}</p>
+								<h4>Upgrades:</h4>
+        `;
+        // Listar upgrades ativos
+        for (const id in gameState.upgradeStacks) {
+          if (gameState.upgradeStacks[id] > 0) {
+            const upgrade = upgrades.find(u => u.id === id);
+            debugHTML += `
+								<p>${upgrade.name}: ${gameState.upgradeStacks[id]}</p>`;
+          }
+        }
+        // Mostrar bônus de dano individuais
+        if (Object.keys(gameState.player.damageBonuses).length > 0) {
+          debugHTML += `
+								<h4>Bônus de Dano:</h4>`;
+          for (const id in gameState.player.damageBonuses) {
+            const upgrade = upgrades.find(u => u.id === id);
+            debugHTML += `
+								<p>${upgrade.name}: +${gameState.player.damageBonuses[id]} dano</p>`;
+          }
+        }
+        debugPanel.innerHTML = debugHTML;
+      }
       // Loop principal do jogo
       function gameLoop(currentTime) {
         const canvas = document.getElementById('gameCanvas');
@@ -1160,7 +1242,7 @@
         const deltaTime = (currentTime - gameState.lastFrameTime) / 1000;
         gameState.lastFrameTime = currentTime;
         // Limpar canvas
-        ctx.clearRect(0, 0, 800, 600);
+        ctx.clearRect(0, 0, gameState.canvasWidth, gameState.canvasHeight);
         // Desenhar fundo estético
         drawPlatformDecor(ctx);
         // Atualizar e desenhar partículas
@@ -1193,21 +1275,18 @@
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
           ctx.fill();
-          // Verificar colisão com inimigos (CORREÇÃO STABILITY)
+          // Verificar colisão com inimigos
           let hit = false;
           for (let j = gameState.enemies.length - 1; j >= 0; j--) {
             const e = gameState.enemies[j];
-            // Pular se já atingiu este inimigo
-            if (p.hitEnemies && p.hitEnemies.includes(e.id)) continue;
             if (p.x > e.x && p.x < e.x + e.width && p.y > e.y && p.y < e.y + e.height) {
-              // Inicializar lista de inimigos atingidos
-              if (!p.hitEnemies) p.hitEnemies = [];
-              p.hitEnemies.push(e.id);
               const killed = e.takeDamage(p.damage);
               if (killed) gameState.enemies.splice(j, 1);
               // Roubo de vida
               if (gameState.player.lifeSteal > 0) {
                 gameState.player.health += p.damage * gameState.player.lifeSteal;
+                // Garantir que a vida não ultrapasse o máximo
+                gameState.player.health = Math.min(gameState.player.health, gameState.player.maxHealth);
               }
               p.hits--;
               if (p.hits <= 0) {
@@ -1217,7 +1296,7 @@
             }
           }
           // Remover projétil se necessário
-          if (hit || p.x < -50 || p.x > 850 || p.y < -50 || p.y > 650) {
+          if (hit || p.x < -50 || p.x > gameState.canvasWidth + 50 || p.y < -50 || p.y > gameState.canvasHeight + 50) {
             gameState.projectiles.splice(i, 1);
           }
         }
@@ -1239,7 +1318,7 @@
             gameState.enemyProjectiles.splice(i, 1);
           }
           // Remover se sair da tela
-          else if (p.x < -50 || p.x > 850 || p.y < -50 || p.y > 650) {
+          else if (p.x < -50 || p.x > gameState.canvasWidth + 50 || p.y < -50 || p.y > gameState.canvasHeight + 50) {
             gameState.enemyProjectiles.splice(i, 1);
           }
         }
@@ -1288,11 +1367,9 @@
               gameState.wave++;
               gameState.waveTime = 0;
             }
-            // Atualizar invencibilidade (DENTRO DO BLOCO DE SPAWN)
-            if (!gameState.isPaused && !gameState.isLevelUp) {
-                if (gameState.invincible > 0) {
-                    gameState.invincible -= deltaTime;
-                }
+            // Atualizar invencibilidade
+            if (gameState.invincible > 0) {
+              gameState.invincible -= deltaTime;
             }
           }
         }
@@ -1307,7 +1384,9 @@
         ctx.fillStyle = '#e9c6b6';
         ctx.font = '24px Caprasimo';
         ctx.textAlign = 'right';
-        ctx.fillText(`Wave: ${gameState.wave}`, 780, 30);
+        ctx.fillText(`Wave: ${gameState.wave}`, gameState.canvasWidth - 20, 30);
+        // Atualizar painel de debug
+        updateDebugPanel();
         // Continuar o loop
         if (!gameState.gameOver) {
           requestAnimationFrame(gameLoop);
@@ -1321,11 +1400,6 @@
       document.getElementById('restartButton').addEventListener('click', () => {
         initGame();
         requestAnimationFrame(gameLoop);
-      });
-      document.querySelectorAll('.upgrade-option').forEach(option => {
-        option.addEventListener('click', () => {
-          applyUpgrade(parseInt(option.getAttribute('data-index')));
-        });
       });
       window.addEventListener('keydown', (e) => {
         gameState.keys[e.key] = true;
