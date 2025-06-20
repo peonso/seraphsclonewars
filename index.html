@@ -335,7 +335,6 @@
       const CANVAS_WIDTH = 960;
       const CANVAS_HEIGHT = 600;
 
-      // REFACTOR: Cache UI elements to avoid repeated DOM lookups
       const ui = {
         healthFill: document.getElementById('healthFill'),
         expFill: document.getElementById('expFill'),
@@ -396,6 +395,7 @@
         enemies: [],
         particles: [],
         wisps: [],
+        thunderbolts: [], // NEW: Array to manage thunderbolt effects
         exp: 0,
         level: 1,
         expToNextLevel: config.exp.baseLevelUp,
@@ -418,11 +418,9 @@
         upgradeStacks: {}
       };
 
-      // REFACTOR: Object pooling for projectiles
       const projectilePool = {
         player: [],
         enemy: [],
-        
         get(poolType) {
             const pool = this[poolType];
             const projectile = pool.find(p => !p.active);
@@ -434,21 +432,15 @@
             pool.push(newProjectile);
             return newProjectile;
         },
-
-        release(projectile) {
-            projectile.active = false;
-        },
-
-        getActive(poolType) {
-            return this[poolType].filter(p => p.active);
-        },
-
+        release(projectile) { projectile.active = false; },
+        getActive(poolType) { return this[poolType].filter(p => p.active); },
         clear() {
             this.player.forEach(p => p.active = false);
             this.enemy.forEach(p => p.active = false);
         }
       };
 
+      // CHANGED: Thunderbolt upgrade effect is updated.
       const upgrades = [
         // Comuns
         { id: 'catalyst', name: 'Catalyst', desc: 'Dano do Projétil +2', rarity: 'common', maxStacks: 10, effect: (p, stacks) => { p.damageBonuses['catalyst'] = 2 * stacks; } },
@@ -464,7 +456,15 @@
         // Raros
         { id: 'catalyst+', name: 'Catalyst+', desc: 'Dano do Projétil +4', rarity: 'rare', maxStacks: 5, effect: (p, stacks) => { p.damageBonuses['catalyst+'] = 4 * stacks; } },
         { id: 'swift+', name: 'Swift+', desc: 'Velocidade de Movimento +20%', rarity: 'rare', maxStacks: 5, effect: (p) => { p.speedMultiplier *= 1.2; } },
-        { id: 'thunderbolt', name: 'Thunderbolt', desc: 'Chama 2 raios do céu', rarity: 'rare', maxStacks: 3, effect: (p) => { p.thunderbolt = { count: (p.thunderbolt?.count || 0) + 2, interval: 3, timer: 0 }; } },
+        {
+          id: 'thunderbolt', name: 'Thunderbolt', desc: 'Chama 2 raios do céu', rarity: 'rare', maxStacks: 3,
+          effect: (p) => {
+            if (!p.thunderbolt) {
+              p.thunderbolt = { count: 0, timer: 0, interval: 3 + Math.random() * 2 }; // Set initial random interval
+            }
+            p.thunderbolt.count += 2;
+          }
+        },
         { id: 'gush', name: 'Gush', desc: '+1 Pulo Adicional', rarity: 'rare', maxStacks: 4, effect: (p) => { p.maxJumps = (p.maxJumps || 1) + 1; } },
         { id: 'will-o-wisp', name: 'Will-O-Wisp', desc: 'Invoca uma chama aliada', rarity: 'rare', maxStacks: 6, effect: (p) => { p.wispCount = Math.min(6, (p.wispCount || 0) + 1); } },
         // Épicos
@@ -473,7 +473,15 @@
         { id: 'overheat', name: 'Overheat', desc: 'Contato corpo a corpo causa 40 de dano', rarity: 'epic', maxStacks: 5, effect: (p) => { p.contactDamage = (p.contactDamage || 0) + 40; } },
         { id: 'immortal', name: 'Immortal', desc: '+1 Revive (mata todos ao reviver)', rarity: 'epic', maxStacks: 3, effect: (p) => { p.revives = (p.revives || 0) + 1; } },
         // Lendários
-        { id: 'thunderbolt+', name: 'Thunderbolt+', desc: 'Chama 4 raios do céu', rarity: 'legendary', maxStacks: 2, effect: (p) => { if (p.thunderbolt) { p.thunderbolt.count += 4; } else { p.thunderbolt = { count: 4, interval: 3, timer: 0 }; } } },
+        {
+          id: 'thunderbolt+', name: 'Thunderbolt+', desc: 'Chama 4 raios do céu', rarity: 'legendary', maxStacks: 2,
+          effect: (p) => {
+            if (!p.thunderbolt) {
+              p.thunderbolt = { count: 0, timer: 0, interval: 3 + Math.random() * 2 };
+            }
+            p.thunderbolt.count += 4;
+          }
+        },
         { id: 'fragmentation+', name: 'Fragmentation+', desc: 'Inimigos liberam 4 projéteis', rarity: 'legendary', maxStacks: 3, effect: (p) => { p.fragmentation = (p.fragmentation || 0) + 4; } },
         { id: 'appraisal', name: 'Appraisal', desc: '+1 escolha de upgrade', rarity: 'legendary', maxStacks: 2, effect: (p) => { p.extraChoices = (p.extraChoices || 0) + 1; } }
       ];
@@ -527,9 +535,15 @@
           }
           const now = Date.now() / 1000;
           if (now - gameState.lastShot > this.shootCooldown) { this.shoot(); gameState.lastShot = now; }
+
+          // CHANGED: Thunderbolt update logic with random interval
           if (this.thunderbolt) {
             this.thunderbolt.timer += deltaTime;
-            if (this.thunderbolt.timer >= this.thunderbolt.interval) { this.castThunderbolt(); this.thunderbolt.timer = 0; }
+            if (this.thunderbolt.timer >= this.thunderbolt.interval) {
+              this.castThunderbolt();
+              this.thunderbolt.timer = 0;
+              this.thunderbolt.interval = 3 + Math.random() * 2; // Set next random interval
+            }
           }
           if (this.barrier.maxShields > 0) {
             this.barrier.timer += deltaTime;
@@ -561,17 +575,21 @@
           p.isCrit = isCrit;
           p.hits = this.projectileHits;
         }
+        // CHANGED: Complete rewrite of castThunderbolt to create staggered, vertical bolts
         castThunderbolt() {
           for (let i = 0; i < this.thunderbolt.count; i++) {
-            const p = projectilePool.get('player');
-            p.x = Math.random() * (CANVAS_WIDTH - 100) + 50;
-            p.y = 0;
-            p.velX = 0;
-            p.velY = 3 * config.projectile.speed;
-            p.radius = 10;
-            p.damage = this.damage * 5;
-            p.isCrit = true;
-            p.hits = 1;
+            setTimeout(() => {
+              if (gameState.gameOver || gameState.isPaused || gameState.isLevelUp) return; // Don't cast if game not active
+              
+              const boltX = Math.random() * (CANVAS_WIDTH - 100) + 50;
+              gameState.thunderbolts.push({
+                x: boltX,
+                width: 20, // Diameter of old projectile (radius 10)
+                damage: this.damage * 5,
+                life: 0.15, // Stays on screen for 0.15 seconds
+                damagedEnemies: new Set() // Track enemies hit by this specific bolt
+              });
+            }, i * 300); // 0.3 second delay between each bolt
           }
         }
         takeDamage(amount) {
@@ -588,7 +606,8 @@
               this.health = this.maxHealth;
               gameState.invincible = 3.0;
               gameState.enemies = [];
-              projectilePool.clear(); // Clear all projectiles on revive
+              projectilePool.clear();
+              gameState.thunderbolts = []; // NEW: Clear active thunderbolts on revive
               gameState.particles = [];
             } else {
               gameState.gameOver = true;
@@ -682,6 +701,7 @@
       class Enemy {
         constructor() {
           const type = getRandomEnemyType();
+          this.id = Math.random(); // Simple unique ID for hit detection
           this.type = type; this.width = type.width; this.height = type.height; this.color = type.color;
           this.moveSpeed = type.moveSpeed; this.projectileSpeed = type.projectileSpeed;
           this.shootCooldown = type.shootCooldown; this.projectileDamage = type.projectileDamage;
@@ -797,7 +817,7 @@
         gameState.player = new Player();
         gameState.enemies = [];
         projectilePool.clear();
-        gameState.particles = []; gameState.wisps = [];
+        gameState.particles = []; gameState.wisps = []; gameState.thunderbolts = []; // NEW: Reset thunderbolts
         gameState.exp = 0; gameState.level = 1;
         gameState.expToNextLevel = config.exp.baseLevelUp;
         gameState.score = 0; gameState.lastSpawn = 0; gameState.gameTime = 0;
@@ -899,8 +919,6 @@
       }
       
       function gameLoop(currentTime) {
-        // BUG FIX: The primary check is just for the gameOver flag now.
-        // The logic for setting this flag is handled correctly inside player.takeDamage().
         if (gameState.gameOver) {
           return;
         }
@@ -976,6 +994,51 @@
         for (const wisp of gameState.wisps) {
             if (!gameState.isPaused && !gameState.isLevelUp) { wisp.update(deltaTime); }
             wisp.draw(ui.ctx);
+        }
+
+        // NEW: Thunderbolt processing, collision, and drawing
+        for (let i = gameState.thunderbolts.length - 1; i >= 0; i--) {
+            const bolt = gameState.thunderbolts[i];
+
+            // 1. Deal damage to enemies in the bolt's path
+            if (!gameState.isPaused && !gameState.isLevelUp) {
+                const boltLeft = bolt.x - bolt.width / 2;
+                const boltRight = bolt.x + bolt.width / 2;
+                for (let j = gameState.enemies.length - 1; j >= 0; j--) {
+                    const enemy = gameState.enemies[j];
+                    if (bolt.damagedEnemies.has(enemy.id)) continue; // Already hit this enemy
+
+                    const enemyLeft = enemy.x;
+                    const enemyRight = enemy.x + enemy.width;
+
+                    // Check for horizontal overlap
+                    if (boltLeft < enemyRight && boltRight > enemyLeft) {
+                        const killed = enemy.takeDamage(bolt.damage);
+                        if (killed) {
+                            gameState.enemies.splice(j, 1);
+                        }
+                        bolt.damagedEnemies.add(enemy.id);
+                    }
+                }
+            }
+
+            // 2. Draw the bolt with glow effect
+            ui.ctx.save();
+            const boltColor = '#00FFFF'; // Bright, saturated cyan for the bolt
+            ui.ctx.fillStyle = boltColor;
+            ui.ctx.shadowColor = boltColor;
+            ui.ctx.shadowBlur = 25; // This creates the glow
+            ui.ctx.globalAlpha = (bolt.life / 0.15); // Fade out effect
+            ui.ctx.fillRect(bolt.x - bolt.width / 2, 0, bolt.width, CANVAS_HEIGHT);
+            ui.ctx.restore(); // Restore context to remove glow from other elements
+
+            // 3. Update bolt lifetime and remove if expired
+            if (!gameState.isPaused && !gameState.isLevelUp) {
+              bolt.life -= deltaTime;
+              if (bolt.life <= 0) {
+                  gameState.thunderbolts.splice(i, 1);
+              }
+            }
         }
 
         if (!gameState.isLevelUp) { gameState.player.update(deltaTime); }
