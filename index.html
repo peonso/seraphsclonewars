@@ -186,7 +186,6 @@
       const config = {
         player: { width: 30, height: 50, speed: 200, jumpForce: 400, gravity: 1000, friction: 0.9, maxHealth: 40, shootCooldown: 0.2, minShootCooldown: 0.05 },
         projectile: { speed: 600, radius: 6, baseDamage: 10, critChance: 0.2, critMultiplier: 2 },
-        enemy: { width: 40, height: 40, spawnRate: 1.5, moveSpeed: 120, shootCooldown: 0.33, projectileSpeed: 120, projectileDamage: 10, minDistance: 200 },
         exp: { baseLevelUp: 100, growthFactor: 1.15, reductionStart: 10, reductionFactor: 0.9 },
       };
 
@@ -434,7 +433,14 @@
         draw(ctx) { ctx.fillStyle = '#e6b077'; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#ffd700'; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius * 0.6, 0, Math.PI * 2); ctx.fill(); }
       }
       
-      const enemyTypes = [{ name: "Fast", width: 25, height: 25, color: "#954e3f", moveSpeed: 180, projectileSpeed: 150, shootCooldown: 1.4, projectileDamage: 8, baseHealth: 15, minHeightRatio: 0.5, projectileCount: 1, behavior: "aggressive" }, { name: "Standard", width: 40, height: 40, color: "#954e3f", moveSpeed: 120, projectileSpeed: 120, shootCooldown: 1.7, projectileDamage: 10, baseHealth: 20, minHeightRatio: 0.5, projectileCount: 1, behavior: "balanced" }, { name: "Tank", width: 60, height: 60, color: "#35150c", moveSpeed: 80, projectileSpeed: 100, shootCooldown: 2.0, projectileDamage: 15, baseHealth: 40, minHeightRatio: 0.45, projectileCount: 1, behavior: "defensive" }, { name: "Sniper", width: 35, height: 35, color: "#4e6278", moveSpeed: 100, projectileSpeed: 200, shootCooldown: 2.5, projectileDamage: 20, baseHealth: 25, minHeightRatio: 0.55, projectileCount: 1, behavior: "longrange" }, { name: "Swarm", width: 20, height: 20, color: "#a96c5a", moveSpeed: 160, projectileSpeed: 100, shootCooldown: 1.4, projectileDamage: 5, baseHealth: 10, minHeightRatio: 0.6, projectileCount: 2, behavior: "swarming" }, { name: "DoubleShooter", width: 45, height: 45, color: "#8d6651", moveSpeed: 110, projectileSpeed: 130, shootCooldown: 1.7, projectileDamage: 7.5, baseHealth: 30, minHeightRatio: 0.5, projectileCount: 2, behavior: "suppressive" }];
+      const enemyTypes = [
+          { name: "Fast", width: 25, height: 25, color: "#954e3f", moveSpeed: 180, projectileSpeed: 150, shootCooldown: 1.4, baseProjectileDamage: 8, damageWaveDenominator: 7.5, baseHealth: 15, minHeightRatio: 0.5, projectileCount: 1, behavior: "aggressive" },
+          { name: "Standard", width: 40, height: 40, color: "#954e3f", moveSpeed: 120, projectileSpeed: 120, shootCooldown: 1.7, baseProjectileDamage: 10, damageWaveDenominator: 6, baseHealth: 20, minHeightRatio: 0.5, projectileCount: 1, behavior: "balanced" },
+          { name: "Tank", width: 60, height: 60, color: "#35150c", moveSpeed: 80, projectileSpeed: 100, shootCooldown: 2.0, baseProjectileDamage: 15, damageWaveDenominator: 4, baseHealth: 40, minHeightRatio: 0.45, projectileCount: 1, behavior: "defensive" },
+          { name: "Sniper", width: 35, height: 35, color: "#4e6278", moveSpeed: 100, projectileSpeed: 200, shootCooldown: 2.5, baseProjectileDamage: 20, damageWaveDenominator: 3, baseHealth: 25, minHeightRatio: 0.55, projectileCount: 1, behavior: "longrange" },
+          { name: "Swarm", width: 20, height: 20, color: "#a96c5a", moveSpeed: 160, projectileSpeed: 100, shootCooldown: 1.4, baseProjectileDamage: 5, damageWaveDenominator: 12, baseHealth: 10, minHeightRatio: 0.6, projectileCount: 2, behavior: "swarming" },
+          { name: "DoubleShooter", width: 45, height: 45, color: "#8d6651", moveSpeed: 110, projectileSpeed: 130, shootCooldown: 1.7, baseProjectileDamage: 7.5, damageWaveDenominator: 8, baseHealth: 30, minHeightRatio: 0.5, projectileCount: 2, behavior: "suppressive" }
+      ];
       const enemyProbabilities = [0.15, 0.30, 0.15, 0.15, 0.15, 0.10];
       function getRandomEnemyType() { const rand = Math.random(); let cumulative = 0; for (let i = 0; i < enemyTypes.length; i++) { cumulative += enemyProbabilities[i]; if (rand < cumulative) { return enemyTypes[i]; } } return enemyTypes[1]; }
 
@@ -443,15 +449,41 @@
           const type = getRandomEnemyType(); this.id = Math.random();
           this.type = type; this.width = type.width; this.height = type.height; this.color = type.color;
           this.moveSpeed = type.moveSpeed; this.projectileSpeed = type.projectileSpeed;
-          this.shootCooldown = type.shootCooldown; this.projectileDamage = type.projectileDamage;
+          this.shootCooldown = type.shootCooldown;
+          this.projectileDamage = type.baseProjectileDamage + Math.floor((gameState.wave - 1) / type.damageWaveDenominator);
           this.projectileCount = type.projectileCount;
           this.x = Math.random() * (CANVAS_WIDTH - this.width); this.y = -this.height;
           this.velY = this.moveSpeed; this.following = false;
-          this.health = type.baseHealth + gameState.wave * 3; this.maxHealth = this.health;
-          this.shootTimer = 0; this.behavior = type.behavior; this.targetY = CANVAS_HEIGHT * type.minHeightRatio;
-          this.startHeight = 0;
+          this.health = type.baseHealth + (gameState.wave - 1) * 3;
+          this.maxHealth = this.health; this.shootTimer = 0; this.behavior = type.behavior;
+          this.targetY = CANVAS_HEIGHT * type.minHeightRatio; this.startHeight = 0;
         }
-        update(deltaTime) { if (gameState.isPaused || gameState.isLevelUp) return; const dx = gameState.player.x + gameState.player.width / 2 - (this.x + this.width / 2); const dy = gameState.player.y + gameState.player.height / 2 - (this.y + this.height / 2); const distance = Math.sqrt(dx * dx + dy * dy); const targetX = gameState.player.x + gameState.player.width / 2; const speedFactor = Math.max(0.5, 1 - (this.width / 100)); const moveStrength = this.following ? 0.003 : 0.001; this.x += (targetX - (this.x + this.width / 2)) * moveStrength * deltaTime * 60 * speedFactor; if (!this.following) { this.y += this.velY * deltaTime * 0.7; if (this.y >= this.targetY) { this.y = this.targetY; this.following = true; this.startHeight = this.y; } } else { this.y = this.startHeight; } this.shootTimer += deltaTime; switch (this.behavior) { case "longrange": if (distance > 400 && this.shootTimer >= this.shootCooldown) this.shoot(); break; case "suppressive": if (this.shootTimer >= this.shootCooldown * 0.7) this.shoot(); break; default: if (this.shootTimer >= this.shootCooldown) this.shoot(); } if (this.shootTimer >= this.shootCooldown) this.shootTimer = 0; if (this.x < 0) this.x = 0; if (this.x > CANVAS_WIDTH - this.width) this.x = CANVAS_WIDTH - this.width; if (this.y < 100) this.y = 100; if (this.y > CANVAS_HEIGHT - this.height) this.y = CANVAS_HEIGHT - this.height; }
+        update(deltaTime) {
+          if (gameState.isPaused || gameState.isLevelUp) return;
+          const dx = gameState.player.x + gameState.player.width / 2 - (this.x + this.width / 2);
+          const dy = gameState.player.y + gameState.player.height / 2 - (this.y + this.height / 2);
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          const targetX = gameState.player.x + gameState.player.width / 2;
+          const speedFactor = Math.max(0.5, 1 - (this.width / 100));
+          const moveStrength = this.following ? 0.003 : 0.001;
+          this.x += (targetX - (this.x + this.width / 2)) * moveStrength * deltaTime * 60 * speedFactor;
+          if (!this.following) {
+            this.y += this.velY * deltaTime * 0.7;
+            if (this.y >= this.targetY) { this.y = this.targetY; this.following = true; this.startHeight = this.y; }
+          } else {
+            this.y = this.startHeight;
+          }
+          this.shootTimer += deltaTime;
+          switch (this.behavior) {
+            case "longrange": if (distance > 400 && this.shootTimer >= this.shootCooldown) this.shoot(); break;
+            case "suppressive": if (this.shootTimer >= this.shootCooldown * 0.7) this.shoot(); break;
+            default: if (this.shootTimer >= this.shootCooldown) this.shoot();
+          }
+          if (this.x < 0) this.x = 0;
+          if (this.x > CANVAS_WIDTH - this.width) this.x = CANVAS_WIDTH - this.width;
+          if (this.y < 100) this.y = 100;
+          if (this.y > CANVAS_HEIGHT - this.height) this.y = CANVAS_HEIGHT - this.height;
+        }
         shoot() {
           const angle = Math.atan2((gameState.player.y + gameState.player.height / 2) - (this.y + this.height / 2), (gameState.player.x + gameState.player.width / 2) - (this.x + this.width / 2));
           const maxProjectiles = Math.min(3, this.projectileCount);
@@ -489,7 +521,6 @@
       
       function calculateExpToNextLevel(level) { if (level <= config.exp.reductionStart) { return Math.floor(config.exp.baseLevelUp * Math.pow(config.exp.growthFactor, level - 1)); } const reduction = Math.pow(config.exp.reductionFactor, level - config.exp.reductionStart); return Math.floor(config.exp.baseLevelUp * Math.pow(config.exp.growthFactor, level - 1) * reduction); }
       
-      // FIX: Restored this entire function
       function createBackgroundCache() {
         const cache = document.createElement('canvas');
         cache.width = CANVAS_WIDTH;
@@ -545,17 +576,29 @@
       function applyUpgrade(index) { const upgrade = gameState.currentUpgrades[index]; if (!gameState.upgradeStacks[upgrade.id]) { gameState.upgradeStacks[upgrade.id] = 0; } if (upgrade.maxStacks && gameState.upgradeStacks[upgrade.id] >= upgrade.maxStacks) { alert(`Você atingiu o limite máximo (${upgrade.maxStacks}) para este upgrade!`); return; } gameState.upgradeStacks[upgrade.id]++; if (upgrade.effect.length === 2) { upgrade.effect(gameState.player, gameState.upgradeStacks[upgrade.id]); } else { upgrade.effect(gameState.player); } gameState.upgrades.push(upgrade); gameState.isLevelUp = false; ui.levelUpScreen.style.display = 'none'; }
       function togglePause() { gameState.isPaused = !gameState.isPaused; ui.pauseOverlay.style.display = gameState.isPaused ? 'flex' : 'none'; }
       
-      // FIX: Restored this entire function
       function getWaveDuration(wave) {
-        const startDuration = 30;
-        const endDuration = 10;
-        const targetWave = 30;
-        const minDuration = 8;
+        const startDuration = 30; const endDuration = 10;
+        const targetWave = 30; const minDuration = 8;
         if (wave >= targetWave) return endDuration;
         const duration = startDuration - ((wave - 1) / (targetWave - 1)) * (startDuration - endDuration);
         return Math.max(minDuration, duration);
       }
       
+      function getSpawnRate(wave) {
+          const START_RATE = 0.8;
+          const TARGET_RATE_WAVE_20 = 3.0;
+          const TARGET_WAVE = 20;
+
+          if (wave <= TARGET_WAVE) {
+              const progress = wave > 1 ? (wave - 1) / (TARGET_WAVE - 1) : 0;
+              return START_RATE + progress * (TARGET_RATE_WAVE_20 - START_RATE);
+          } else {
+              const post20ScalingFactor = 0.15;
+              const wavesAfterTarget = wave - TARGET_WAVE;
+              return TARGET_RATE_WAVE_20 + Math.sqrt(wavesAfterTarget) * post20ScalingFactor;
+          }
+      }
+
       function updateDebugPanel() {
         if (!ui.debugPanel || !gameState.player) return;
         const p = gameState.player;
@@ -587,7 +630,6 @@
           <p>Crítico: ${(p.critChance * 100).toFixed(0)}%</p>
           <p>Vel. Ataque: ${(1 / p.shootCooldown).toFixed(1)}/s</p>
           <p>Roubo de Vida: ${((p.lifeSteal || 0) * 100).toFixed(0)}%</p>
-          <p>Rage: ${p.hasRage ? 'ATIVO' : 'NÃO'}</p>
           <p>Friction LVL: ${p.frictionProjectiles}</p>
           <p>Projétil Hits: ${p.projectileHits}</p>
           <p>Fragmentação: ${p.fragmentation}</p>
@@ -651,7 +693,7 @@
         if (!gameState.isLevelUp) gameState.player.update(deltaTime);
         if (!gameState.isPaused && !gameState.isLevelUp) {
             gameState.lastSpawn += deltaTime;
-            if (gameState.lastSpawn > 1 / config.enemy.spawnRate) {
+            if (gameState.lastSpawn > 1 / getSpawnRate(gameState.wave)) {
                 gameState.enemies.push(new Enemy());
                 gameState.lastSpawn = 0;
             }
